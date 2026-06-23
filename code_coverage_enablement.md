@@ -150,22 +150,25 @@ brew install lcov              # macOS
 ```
 
 **生成报告（含分支覆盖率）：**
+
+> lcov 默认不收集分支数据，需显式启用。`--branch-coverage` 是推荐写法，详见下方「GCC 分支覆盖率专项」章节。
+
 ```bash
-# 1. 收集覆盖率数据（--rc branch_coverage=1 启用分支统计）
+# 1. 收集覆盖率数据（--branch-coverage 启用分支统计，每步都要加）
 lcov --capture \
      --directory . \
      --output-file coverage.info \
-     --rc branch_coverage=1
+     --branch-coverage
 
 # 2. 过滤系统头文件和第三方库
 lcov --remove coverage.info '/usr/*' '*/third_party/*' \
      --output-file coverage_filtered.info \
-     --rc branch_coverage=1
+     --branch-coverage
 
 # 3. 打印摘要到终端
-lcov --summary coverage_filtered.info --rc branch_coverage=1
+lcov --summary coverage_filtered.info --branch-coverage
 
-# 4. 生成 HTML 报告（--branch-coverage 在页面中显示分支标记）
+# 4. 生成 HTML 报告
 genhtml coverage_filtered.info \
         --output-directory coverage_html/ \
         --branch-coverage \
@@ -256,36 +259,75 @@ branch  1 taken 7
 
 ### lcov 分支统计
 
-**关键：所有 lcov/genhtml 调用都要带分支参数，缺一不可。**
+#### 为什么需要 `--rc branch_coverage=1`
+
+lcov 默认**只收集行覆盖率和函数覆盖率，分支数据默认关闭**。官方手册的原文说明：
+
+> *"Branch data is not collected or displayed by default"*
+> *（`branch_coverage` 的默认值为 `0`）*
+
+关闭的原因是性能考量——分支数据会显著增加内存占用、CPU 处理时间和 `.info` 文件体积，对于大型项目尤为明显。因此 lcov 将其设计为显式启用。
+
+`--rc name=value` 是 lcov 通用的运行时配置覆盖机制，等价于临时修改配置文件中对应条目。`--rc branch_coverage=1` 就是把 `branch_coverage` 这个配置项从默认的 `0` 改为 `1`。
+
+**版本差异：**
+
+| 版本 | 旧写法（已废弃） | 新写法（推荐） | 等价命令行选项 |
+|------|----------------|--------------|--------------|
+| lcov 1.x | `--rc lcov_branch_coverage=1` | `--rc branch_coverage=1` | `--branch-coverage` |
+| lcov 2.x | 同上，保持兼容 | `--rc branch_coverage=1` | `--branch-coverage` |
+
+`--branch-coverage` 是 `--rc branch_coverage=1` 的命令行简写，两者完全等价——后者是为了与 `genhtml` 接口风格保持一致才加入的。**实际使用推荐统一用 `--branch-coverage`**，更简洁也不容易出错。
+
+#### 三种启用方式对比
+
+**方式 A：每条命令加 `--branch-coverage`（适合临时使用或脚本）**
 
 ```bash
-# ❌ 错误：漏掉 --rc，分支数据不会出现在报告里
-lcov --capture --directory . --output-file coverage.info
-lcov --summary coverage.info
-
-# ✅ 正确：每步都带上分支参数
-lcov --capture \
-     --directory . \
-     --output-file coverage.info \
-     --rc branch_coverage=1
-
-lcov --remove coverage.info '/usr/*' \
-     --output-file coverage_filtered.info \
-     --rc branch_coverage=1
-
-lcov --summary coverage_filtered.info \
-     --rc branch_coverage=1
-
-genhtml coverage_filtered.info \
-        --output-directory coverage_html/ \
-        --branch-coverage          # ← genhtml 用这个参数，不是 --rc
+lcov --capture --directory . -o coverage.info --branch-coverage
+lcov --remove coverage.info '/usr/*' -o coverage_clean.info --branch-coverage
+lcov --summary coverage_clean.info --branch-coverage
+genhtml coverage_clean.info -o coverage_html/ --branch-coverage
 ```
 
-**lcov 2.x 用户**可在 `~/.lcovrc` 中设为默认，省去每次手写：
+**方式 B：每条命令加 `--rc branch_coverage=1`（与旧文档/CI 脚本保持一致）**
+
+```bash
+lcov --capture --directory . -o coverage.info --rc branch_coverage=1
+lcov --remove coverage.info '/usr/*' -o coverage_clean.info --rc branch_coverage=1
+lcov --summary coverage_clean.info --rc branch_coverage=1
+genhtml coverage_clean.info -o coverage_html/ --branch-coverage   # genhtml 用 --branch-coverage
+```
+
+**方式 C：写入 `~/.lcovrc` 永久生效（适合个人开发环境）**
 
 ```ini
 # ~/.lcovrc
 branch_coverage = 1
+```
+
+写入后所有 lcov/genhtml 命令无需再加参数，直接生效。
+
+> **注意**：三种方式中，`--branch-coverage` 和 `--rc branch_coverage=1` 对 `lcov` 完全等价；而 `genhtml` 只识别 `--branch-coverage`，不接受 `--rc branch_coverage=1`。
+
+#### 完整的正确与错误对比
+
+```bash
+# ❌ 错误：不加任何分支参数，报告里 branches 行消失或为 0%
+lcov --capture --directory . --output-file coverage.info
+lcov --summary coverage.info
+
+# ❌ 错误：collect 时加了，但 remove/summary 漏掉
+#    .info 文件中的分支数据在 remove 步骤被丢弃
+lcov --capture --directory . -o coverage.info --branch-coverage
+lcov --remove coverage.info '/usr/*' -o coverage_clean.info   # ← 漏了！
+lcov --summary coverage_clean.info                             # ← 漏了！
+
+# ✅ 正确：每步都带上（推荐用 --branch-coverage）
+lcov --capture --directory . -o coverage.info --branch-coverage
+lcov --remove coverage.info '/usr/*' -o coverage_clean.info --branch-coverage
+lcov --summary coverage_clean.info --branch-coverage
+genhtml coverage_clean.info -o coverage_html/ --branch-coverage
 ```
 
 ### HTML 报告中的分支标记
@@ -373,19 +415,19 @@ echo "✓ 测试运行完成"
 lcov --capture \
      --directory . \
      --output-file coverage.info \
-     --rc branch_coverage=1 \
+     --branch-coverage \
      --quiet
 
 # 过滤系统文件
 lcov --remove coverage.info '/usr/*' '*/test/*' \
      --output-file coverage_clean.info \
-     --rc branch_coverage=1 \
+     --branch-coverage \
      --quiet
 
 # 打印摘要
 echo ""
 echo "=== 覆盖率摘要 ==="
-lcov --summary coverage_clean.info --rc branch_coverage=1
+lcov --summary coverage_clean.info --branch-coverage
 
 # 生成 HTML
 genhtml coverage_clean.info \
@@ -420,7 +462,7 @@ clang++ --coverage -O0 -g -std=c++17 -o my_app main.cpp utils.cpp
 
 ./my_program
 
-lcov --capture --directory . --output-file coverage.info --rc branch_coverage=1
+lcov --capture --directory . --output-file coverage.info --branch-coverage
 genhtml coverage.info --output-directory coverage_html/ --branch-coverage
 ```
 
@@ -603,9 +645,9 @@ cmake -B build -DENABLE_COVERAGE=ON
 cmake --build build
 cd build && ctest --output-on-failure
 lcov --capture --directory . \
-     --output-file coverage.info --rc branch_coverage=1
+     --output-file coverage.info --branch-coverage
 lcov --remove coverage.info '/usr/*' \
-     --output-file coverage_clean.info --rc branch_coverage=1
+     --output-file coverage_clean.info --branch-coverage
 genhtml coverage_clean.info \
         --output-directory coverage_html/ --branch-coverage
 ```
@@ -668,10 +710,10 @@ coverage-gcc: clean-cov
 	$(CXX) --coverage -O0 -g -o $(TARGET) $(SRCS)
 	./$(TARGET)
 	lcov --capture --directory . \
-	     --output-file coverage.info --rc branch_coverage=1
+	     --output-file coverage.info --branch-coverage
 	lcov --remove coverage.info '/usr/*' \
-	     --output-file coverage_clean.info --rc branch_coverage=1
-	lcov --summary coverage_clean.info --rc branch_coverage=1
+	     --output-file coverage_clean.info --branch-coverage
+	lcov --summary coverage_clean.info --branch-coverage
 	genhtml coverage_clean.info \
 	        --output-directory coverage_html/ --branch-coverage
 	@echo "报告：coverage_html/index.html"
@@ -728,12 +770,12 @@ jobs:
         run: |
           lcov --capture --directory build \
                --output-file coverage.info \
-               --rc branch_coverage=1
+               --branch-coverage
           lcov --remove coverage.info '/usr/*' '*/test/*' \
                --output-file coverage_filtered.info \
-               --rc branch_coverage=1
+               --branch-coverage
           lcov --summary coverage_filtered.info \
-               --rc branch_coverage=1
+               --branch-coverage
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
@@ -810,11 +852,11 @@ g++ --coverage -O0 -g -o prog main.cpp
 ./prog
 
 # 收集（含分支）
-lcov --capture --directory . -o cov.info --rc branch_coverage=1
-lcov --remove cov.info '/usr/*' -o cov_clean.info --rc branch_coverage=1
+lcov --capture --directory . -o cov.info --branch-coverage
+lcov --remove cov.info '/usr/*' -o cov_clean.info --branch-coverage
 
 # 摘要
-lcov --summary cov_clean.info --rc branch_coverage=1
+lcov --summary cov_clean.info --branch-coverage
 
 # HTML
 genhtml cov_clean.info -o html/ --branch-coverage
@@ -848,7 +890,7 @@ llvm-cov export ./prog -instr-profile=cov.profdata \
 
 ```
 使用 GCC 编译器？
-  └─► gcc --coverage + lcov --rc branch_coverage=1 + genhtml --branch-coverage
+  └─► gcc --coverage + lcov --branch-coverage + genhtml --branch-coverage
 
 使用 Clang，需要兼容 lcov 工具链？
   └─► clang --coverage（流程同 GCC）
