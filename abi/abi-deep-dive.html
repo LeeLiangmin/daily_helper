@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABI 深度调研报告</title>
+<style>
+  :root {
+    --ink:       #0f0f0e;
+    --ink-2:     #3a3a37;
+    --ink-3:     #6b6a65;
+    --rule:      #e2e0d8;
+    --rule-2:    #c8c6bc;
+    --bg:        #fafaf8;
+    --bg-card:   #ffffff;
+    --accent:    #1a4f8a;
+    --accent-2:  #e8f0fb;
+    --teal:      #0f6e56;
+    --teal-bg:   #e1f5ee;
+    --coral:     #993c1d;
+    --coral-bg:  #faece7;
+    --amber:     #854f0b;
+    --amber-bg:  #faeeda;
+    --red:       #a32d2d;
+    --red-bg:    #fcebeb;
+    --purple:    #3c3489;
+    --purple-bg: #eeedfe;
+    --mono:      'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+    --sans:      -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:       #f0efe8;
+      --ink-2:     #c3c2b7;
+      --ink-3:     #898781;
+      --rule:      #2c2c2a;
+      --rule-2:    #3a3a37;
+      --bg:        #141413;
+      --bg-card:   #1e1e1c;
+      --accent:    #6da4e8;
+      --accent-2:  #0c2040;
+      --teal:      #5dcaa5;
+      --teal-bg:   #04342c;
+      --coral:     #f0997b;
+      --coral-bg:  #4a1b0c;
+      --amber:     #ef9f27;
+      --amber-bg:  #412402;
+      --red:       #f09595;
+      --red-bg:    #501313;
+      --purple:    #afa9ec;
+      --purple-bg: #26215c;
+      --mono:      'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Layout ── */
+  .page-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 28px 80px;
+  }
+
+  /* ── Header ── */
+  .doc-header {
+    border-bottom: 2px solid var(--ink);
+    padding: 56px 0 32px;
+    margin-bottom: 48px;
+  }
+  .doc-header .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 16px;
+  }
+  .doc-header h1 {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+  .doc-header .subtitle {
+    font-size: 16px;
+    color: var(--ink-2);
+    max-width: 620px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  .meta-row span { display: flex; align-items: center; gap: 6px; }
+
+  /* ── TL;DR ── */
+  .tldr {
+    background: var(--accent-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 20px 24px;
+    margin-bottom: 48px;
+  }
+  .tldr .tldr-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .tldr p { font-size: 14px; color: var(--ink-2); line-height: 1.7; margin-bottom: 8px; }
+  .tldr p:last-child { margin-bottom: 0; }
+
+  /* ── Table of Contents ── */
+  .toc {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 56px;
+  }
+  .toc h2 { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 16px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { font-size: 14px; line-height: 1.9; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── Section ── */
+  section { margin-bottom: 64px; scroll-margin-top: 24px; }
+  section + section { border-top: 1px solid var(--rule); padding-top: 56px; }
+
+  h2.section-title {
+    font-size: clamp(20px, 2.8vw, 26px);
+    font-weight: 700;
+    letter-spacing: -.02em;
+    color: var(--ink);
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+  .section-num {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+    letter-spacing: -.01em;
+  }
+  h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-2);
+    margin: 24px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  p { color: var(--ink-2); margin-bottom: 16px; line-height: 1.8; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ── Diagram card ── */
+  .diagram-card {
+    margin: 32px 0;
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .diagram-card svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .diagram-caption {
+    padding: 12px 20px;
+    border-top: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1.5;
+  }
+  .diagram-caption strong { color: var(--ink-2); font-weight: 600; }
+
+  /* ── Code blocks ── */
+  pre {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--ink);
+    margin: 20px 0;
+  }
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--rule);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+  pre code { background: none; padding: 0; border-radius: 0; }
+
+  /* ── Info boxes ── */
+  .callout {
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 24px 0;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .callout-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .callout.warning { background: var(--amber-bg); border-left: 3px solid var(--amber); }
+  .callout.warning .callout-label { color: var(--amber); }
+  .callout.warning p { color: var(--ink-2); }
+  .callout.danger  { background: var(--red-bg);   border-left: 3px solid var(--red); }
+  .callout.danger  .callout-label { color: var(--red); }
+  .callout.danger  p { color: var(--ink-2); }
+  .callout.info    { background: var(--teal-bg);  border-left: 3px solid var(--teal); }
+  .callout.info    .callout-label { color: var(--teal); }
+  .callout.info    p { color: var(--ink-2); }
+  .callout.tip     { background: var(--purple-bg); border-left: 3px solid var(--purple); }
+  .callout.tip     .callout-label { color: var(--purple); }
+  .callout.tip     p { color: var(--ink-2); }
+
+  /* ── Comparison table ── */
+  .compare-table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 13.5px; }
+  .compare-table th {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    padding: 10px 14px;
+    font-weight: 700;
+    text-align: left;
+    color: var(--ink);
+    font-size: 12px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .compare-table td {
+    border: 1px solid var(--rule);
+    padding: 10px 14px;
+    color: var(--ink-2);
+    vertical-align: top;
+    line-height: 1.6;
+  }
+  .compare-table tr:nth-child(even) td { background: var(--bg-card); }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    vertical-align: middle;
+  }
+  .tag.stable   { background: var(--teal-bg);   color: var(--teal); }
+  .tag.unstable { background: var(--red-bg);    color: var(--red); }
+  .tag.partial  { background: var(--amber-bg);  color: var(--amber); }
+
+  /* ── Key findings grid ── */
+  .findings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin: 28px 0;
+  }
+  .finding-card {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .finding-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: .08em;
+    margin-bottom: 6px;
+  }
+  .finding-card p { font-size: 13.5px; margin: 0; line-height: 1.65; }
+
+  /* ── Register pill row ── */
+  .reg-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+  .reg {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--rule-2);
+    background: var(--bg-card);
+    color: var(--ink);
+  }
+  .reg.param  { background: var(--teal-bg);   color: var(--teal);   border-color: var(--teal); }
+  .reg.ret    { background: var(--accent-2);  color: var(--accent); border-color: var(--accent); }
+  .reg.saved  { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
+  .reg.win    { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber); }
+
+  /* ── Footer ── */
+  .doc-footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 32px;
+    margin-top: 64px;
+    font-size: 12px;
+    color: var(--ink-3);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* ── SVG theme ── */
+  svg .t  { font-family: var(--sans); font-size: 14px; fill: var(--ink); }
+  svg .ts { font-family: var(--sans); font-size: 12px; fill: var(--ink-3); }
+  svg .th { font-family: var(--sans); font-size: 14px; font-weight: 600; fill: var(--ink); }
+
+  /* Ramp fills (light / dark auto) */
+  .c-teal   rect, .c-teal   circle { fill: #e1f5ee; stroke: #0f6e56; }
+  .c-teal   .t, .c-teal   .ts, .c-teal   .th { fill: #085041; }
+  .c-blue   rect, .c-blue   circle { fill: #e6f1fb; stroke: #185fa5; }
+  .c-blue   .t, .c-blue   .ts, .c-blue   .th { fill: #0c447c; }
+  .c-coral  rect, .c-coral  circle { fill: #faece7; stroke: #993c1d; }
+  .c-coral  .t, .c-coral  .ts, .c-coral  .th { fill: #712b13; }
+  .c-purple rect, .c-purple circle { fill: #eeedfe; stroke: #534ab7; }
+  .c-purple .t, .c-purple .ts, .c-purple .th { fill: #3c3489; }
+  .c-amber  rect, .c-amber  circle { fill: #faeeda; stroke: #ba7517; }
+  .c-amber  .t, .c-amber  .ts, .c-amber  .th { fill: #633806; }
+  .c-red    rect, .c-red    circle { fill: #fcebeb; stroke: #a32d2d; }
+  .c-red    .t, .c-red    .ts, .c-red    .th { fill: #791f1f; }
+  .c-green  rect, .c-green  circle { fill: #eaf3de; stroke: #3b6d11; }
+  .c-green  .t, .c-green  .ts, .c-green  .th { fill: #27500a; }
+  .c-gray   rect, .c-gray   circle { fill: #f1efe8; stroke: #5f5e5a; }
+  .c-gray   .t, .c-gray   .ts, .c-gray   .th { fill: #2c2c2a; }
+  .box { fill: #f1efe8; stroke: #5f5e5a; }
+  .arr { stroke: #5f5e5a; fill: none; stroke-width: 1.5; }
+  .leader { stroke: #898781; fill: none; stroke-width: 0.5; stroke-dasharray: 4 3; }
+  @media (prefers-color-scheme: dark) {
+    .c-teal   rect, .c-teal   circle { fill: #04342c; stroke: #5dcaa5; }
+    .c-teal   .t, .c-teal   .ts, .c-teal   .th { fill: #9fe1cb; }
+    .c-blue   rect, .c-blue   circle { fill: #042c53; stroke: #378add; }
+    .c-blue   .t, .c-blue   .ts, .c-blue   .th { fill: #b5d4f4; }
+    .c-coral  rect, .c-coral  circle { fill: #4a1b0c; stroke: #d85a30; }
+    .c-coral  .t, .c-coral  .ts, .c-coral  .th { fill: #f5c4b3; }
+    .c-purple rect, .c-purple circle { fill: #26215c; stroke: #7f77dd; }
+    .c-purple .t, .c-purple .ts, .c-purple .th { fill: #cecbf6; }
+    .c-amber  rect, .c-amber  circle { fill: #412402; stroke: #ef9f27; }
+    .c-amber  .t, .c-amber  .ts, .c-amber  .th { fill: #fac775; }
+    .c-red    rect, .c-red    circle { fill: #501313; stroke: #e24b4a; }
+    .c-red    .t, .c-red    .ts, .c-red    .th { fill: #f7c1c1; }
+    .c-green  rect, .c-green  circle { fill: #173404; stroke: #639922; }
+    .c-green  .t, .c-green  .ts, .c-green  .th { fill: #c0dd97; }
+    .c-gray   rect, .c-gray   circle { fill: #2c2c2a; stroke: #888780; }
+    .c-gray   .t, .c-gray   .ts, .c-gray   .th { fill: #d3d1c7; }
+    .box   { fill: #2c2c2a; stroke: #888780; }
+    .arr   { stroke: #888780; }
+    svg .t  { fill: #f0efe8; }
+    svg .ts { fill: #898781; }
+    svg .th { fill: #f0efe8; }
+  }
+
+  @media (max-width: 600px) {
+    .page-wrap { padding: 0 16px 60px; }
+    .doc-header { padding: 36px 0 24px; }
+    .findings-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+<!-- ══════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════ -->
+<header class="doc-header">
+  <p class="eyebrow">技术深度调研报告</p>
+  <h1>ABI：应用程序二进制接口<br>深度技术解析</h1>
+  <p class="subtitle">从基础概念到 C ABI 的事实标准地位，深入剖析 Rust、C++ 的 ABI 问题，覆盖工程实践与跨语言互操作全链路。</p>
+  <div class="meta-row">
+    <span>📅 2026 年 6 月</span>
+    <span>📑 覆盖：C · C++ · Rust · Go · Swift · Python</span>
+    <span>🔧 System V AMD64 · Windows x64 · Itanium ABI</span>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════
+     TL;DR
+══════════════════════════════════════════ -->
+<div class="tldr">
+  <div class="tldr-label">TL;DR — 三句话摘要</div>
+  <p><strong>ABI 是编译后二进制代码层面的契约</strong>，规定调用约定、数据布局、寄存器使用、名称修饰等，决定两个独立编译的二进制模块能否正确互操作；API 是源码层面的契约，两者有本质区别。</p>
+  <p><strong>C ABI 因其简单、无修饰、与系统调用绑定</strong>，成为所有语言跨语言互操作（FFI）的事实标准"通用语"——任何语言要与操作系统交互，最终都要经过 C ABI。</p>
+  <p><strong>Rust 故意不稳定化原生 ABI</strong>（保留布局优化自由度），通过 <code>extern "C"</code> + <code>#[repr(C)]</code> 互操作；C++ 因 vtable/RTTI/异常/名称修饰复杂性，GCC/Clang（Itanium ABI）与 MSVC ABI 互不兼容，WG21 2020 年投票决定不破坏现有 ABI。</p>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TOC
+══════════════════════════════════════════ -->
+<nav class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#s1">什么是 ABI</a> — 定义、与 API 的区别、包含内容、稳定性</li>
+    <li><a href="#s2">为什么 C ABI 是事实标准</a> — System V AMD64、Windows x64、跨语言桥梁</li>
+    <li><a href="#s3">Rust ABI 问题</a> — 不稳定原因、repr 注解、v0 修饰、生态方案</li>
+    <li><a href="#s4">C++ ABI 问题</a> — vtable、名称修饰、GCC5 双 ABI、WG21 决策</li>
+    <li><a href="#s5">其他语言的 ABI</a> — Swift、Go、Python、.NET</li>
+    <li><a href="#s6">工程实践</a> — SONAME、符号版本化、libabigail、最佳实践</li>
+  </ol>
+</nav>
+
+<!-- ══════════════════════════════════════════
+     SECTION 1 — 什么是 ABI
+══════════════════════════════════════════ -->
+<section id="s1">
+  <p class="section-num">第一章</p>
+  <h2 class="section-title">什么是 ABI</h2>
+
+  <p>ABI（Application Binary Interface，应用程序二进制接口）是软件在"进程内机器码访问"层面暴露的接口——它是两个独立编译的二进制程序模块之间的契约，规定了数据如何在内存中组织、函数如何被调用、系统如何管理资源。</p>
+
+  <h3>ABI 与 API 的本质区别</h3>
+  <p>这是理解 ABI 的第一步，也是最容易混淆的地方：</p>
+
+  <!-- 图1 -->
+  <div class="diagram-card">
+    <svg width="100%" viewBox="0 0 680 340" role="img">
+      <title>ABI vs API 概念对比</title>
+      <defs>
+        <marker id="arr1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-teal">
+        <rect x="30" y="20" width="270" height="36" rx="8" stroke-width="0.5"/>
+        <text class="th" x="165" y="42" text-anchor="middle" dominant-baseline="central">API — 源码层契约</text>
+      </g>
+      <rect x="30" y="70" width="270" height="215" rx="12" fill="none" stroke-width="0.5" stroke="#5f5e5a" stroke-dasharray="6 3"/>
+      <text class="ts" x="165" y="100" text-anchor="middle">函数签名（人类可读）</text>
+      <rect class="box" x="50" y="112" width="230" height="38" rx="6" stroke-width="0.5"/>
+      <text class="th" x="165" y="131" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12">int add(int a, int b);</text>
+      <text class="ts" x="165" y="170" text-anchor="middle">类型名（如头文件）</text>
+      <rect class="box" x="50" y="182" width="230" height="38" rx="6" stroke-width="0.5"/>
+      <text class="th" x="165" y="201" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12">struct Point { int x, y; };</text>
+      <text class="ts" x="165" y="240" text-anchor="middle">变更影响：需重新编译</text>
+      <rect x="50" y="252" width="230" height="26" rx="6" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="165" y="265" text-anchor="middle">API 兼容 ≠ ABI 兼容</text>
+      <g class="c-purple">
+        <rect x="296" y="140" width="88" height="60" rx="8" stroke-width="0.5"/>
+        <text class="th" x="340" y="162" text-anchor="middle" dominant-baseline="central">编译器</text>
+        <text class="ts" x="340" y="182" text-anchor="middle">翻译/决策</text>
+      </g>
+      <line x1="300" y1="170" x2="216" y2="170" class="arr" marker-end="url(#arr1)" stroke="#5f5e5a"/>
+      <line x1="384" y1="170" x2="464" y2="170" class="arr" marker-end="url(#arr1)" stroke="#5f5e5a"/>
+      <g class="c-coral">
+        <rect x="380" y="20" width="270" height="36" rx="8" stroke-width="0.5"/>
+        <text class="th" x="515" y="42" text-anchor="middle" dominant-baseline="central">ABI — 二进制层契约</text>
+      </g>
+      <rect x="380" y="70" width="270" height="215" rx="12" fill="none" stroke-width="0.5" stroke="#5f5e5a" stroke-dasharray="6 3"/>
+      <text class="ts" x="515" y="100" text-anchor="middle">符号名（修饰后）</text>
+      <rect class="box" x="400" y="112" width="230" height="38" rx="6" stroke-width="0.5"/>
+      <text class="th" x="515" y="131" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="11">_Z3addii  /  ?add@@YAHHH@Z</text>
+      <text class="ts" x="515" y="170" text-anchor="middle">调用约定 + 内存布局</text>
+      <rect class="box" x="400" y="182" width="230" height="38" rx="6" stroke-width="0.5"/>
+      <text class="th" x="515" y="201" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="11">RDI=a, RSI=b → RAX=ret</text>
+      <text class="ts" x="515" y="240" text-anchor="middle">变更影响：运行时崩溃/数据损坏</text>
+      <rect x="400" y="252" width="230" height="26" rx="6" fill="none" stroke-width="0.5" stroke="#a32d2d"/>
+      <text class="ts" x="515" y="265" text-anchor="middle" fill="#a32d2d">ABI 破坏 → segfault / 未定义行为</text>
+    </svg>
+    <div class="diagram-caption"><strong>图 1 · API vs ABI</strong> — 左侧是人类书写的源码契约，经编译器翻译后形成右侧的二进制契约。API 变更只需重新编译；ABI 破坏则可能引发运行时崩溃而无任何编译期警告。</div>
+  </div>
+
+  <h3>ABI 包含哪些内容</h3>
+  <p>一个完整的 ABI 覆盖以下所有维度：</p>
+  <table class="compare-table">
+    <thead><tr><th>维度</th><th>具体内容</th><th>破坏后果</th></tr></thead>
+    <tbody>
+      <tr><td><strong>调用约定</strong></td><td>参数顺序、寄存器/栈传参、返回值位置、栈清理责任</td><td>参数被错误读取，返回值丢失</td></tr>
+      <tr><td><strong>数据类型布局</strong></td><td>标量大小、对齐、填充（padding）、位域规则</td><td>结构体字段偏移错误，数据损坏</td></tr>
+      <tr><td><strong>名称修饰</strong></td><td>源码符号→链接器符号名的映射规则</td><td>链接时找不到符号（undefined reference）</td></tr>
+      <tr><td><strong>对象模型</strong></td><td>C++ vtable 布局、RTTI 结构、异常处理表</td><td>虚函数派发错误，类型转换失败</td></tr>
+      <tr><td><strong>寄存器保存约定</strong></td><td>哪些寄存器由调用者/被调用者保存</td><td>寄存器被意外覆盖，栈损坏</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <div class="callout-label">💡 关键认知</div>
+    <p>ABI 稳定性意味着：不同版本编译的二进制无需重新编译即可正确协同工作。ABI 破坏（ABI breakage）最危险之处在于，它在链接期可能完全没有报错，而是在运行时以段错误（segfault）或静默数据损坏的形式爆发。</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 2 — C ABI 事实标准
+══════════════════════════════════════════ -->
+<section id="s2">
+  <p class="section-num">第二章</p>
+  <h2 class="section-title">为什么 C ABI 是事实标准</h2>
+
+  <p>"C 类型是通用语，因为 C ABI 是通用语。"任何语言要打开文件、创建进程、分配内存，最终都必须通过平台的 C ABI 到达内核。每个平台上，C 编译器的调用约定成为该平台的标准 ABI，所有其他语言需要互操作时都以此为目标。</p>
+
+  <!-- 图3：C ABI 桥梁 -->
+  <div class="diagram-card">
+    <svg width="100%" viewBox="0 0 680 430" role="img">
+      <title>C ABI 作为跨语言互操作通用桥梁</title>
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <text class="ts" x="340" y="22" text-anchor="middle">高层语言（各有自己的 ABI）</text>
+      <g class="c-coral"><rect x="30" y="32" width="100" height="40" rx="8" stroke-width="0.5"/>
+        <text class="th" x="80" y="48" text-anchor="middle" dominant-baseline="central">Rust</text>
+        <text class="ts" x="80" y="62" text-anchor="middle">不稳定 ABI</text></g>
+      <g class="c-purple"><rect x="145" y="32" width="100" height="40" rx="8" stroke-width="0.5"/>
+        <text class="th" x="195" y="48" text-anchor="middle" dominant-baseline="central">C++</text>
+        <text class="ts" x="195" y="62" text-anchor="middle">Itanium / MSVC</text></g>
+      <g class="c-teal"><rect x="260" y="32" width="100" height="40" rx="8" stroke-width="0.5"/>
+        <text class="th" x="310" y="48" text-anchor="middle" dominant-baseline="central">Go</text>
+        <text class="ts" x="310" y="62" text-anchor="middle">ABI0 / Internal</text></g>
+      <g class="c-blue"><rect x="375" y="32" width="100" height="40" rx="8" stroke-width="0.5"/>
+        <text class="th" x="425" y="48" text-anchor="middle" dominant-baseline="central">Python</text>
+        <text class="ts" x="425" y="62" text-anchor="middle">CPython C API</text></g>
+      <g class="c-amber"><rect x="490" y="32" width="100" height="40" rx="8" stroke-width="0.5"/>
+        <text class="th" x="540" y="48" text-anchor="middle" dominant-baseline="central">Java / JVM</text>
+        <text class="ts" x="540" y="62" text-anchor="middle">JNI</text></g>
+      <line x1="80"  y1="72" x2="80"  y2="128" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr3)"/>
+      <line x1="195" y1="72" x2="195" y2="128" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr3)"/>
+      <line x1="310" y1="72" x2="310" y2="128" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr3)"/>
+      <line x1="425" y1="72" x2="425" y2="128" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr3)"/>
+      <line x1="540" y1="72" x2="540" y2="128" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr3)"/>
+      <rect x="30" y="128" width="590" height="48" rx="10" fill="none" stroke-width="0.5" stroke="#5f5e5a" stroke-dasharray="6 3"/>
+      <text class="ts" x="340" y="146" text-anchor="middle">FFI 边界层（各语言的外部函数接口）</text>
+      <text class="ts" x="340" y="166" text-anchor="middle" font-family="monospace" font-size="11">extern "C"  /  ctypes  /  cgo  /  JNI  /  P/Invoke</text>
+      <line x1="340" y1="176" x2="340" y2="210" stroke="#5f5e5a" stroke-width="2" marker-end="url(#arr3)"/>
+      <text class="ts" x="362" y="197" font-size="11">全部降级到</text>
+      <g class="c-amber">
+        <rect x="120" y="210" width="440" height="62" rx="12" stroke-width="1"/>
+        <text class="th" x="340" y="232" text-anchor="middle" dominant-baseline="central" font-size="15">C ABI — 事实标准（de facto standard）</text>
+        <text class="ts" x="340" y="258" text-anchor="middle">调用约定明确 · 无名称修饰 · 类型布局可预测 · 工具链成熟</text>
+      </g>
+      <line x1="340" y1="272" x2="340" y2="305" stroke="#5f5e5a" stroke-width="2" marker-end="url(#arr3)"/>
+      <g class="c-gray"><rect x="30" y="305" width="272" height="52" rx="8" stroke-width="0.5"/>
+        <text class="th" x="166" y="323" text-anchor="middle" dominant-baseline="central">libc / glibc / musl</text>
+        <text class="ts" x="166" y="343" text-anchor="middle">系统调用包装、动态链接</text></g>
+      <g class="c-gray"><rect x="378" y="305" width="272" height="52" rx="8" stroke-width="0.5"/>
+        <text class="th" x="514" y="323" text-anchor="middle" dominant-baseline="central">OS Syscall Interface</text>
+        <text class="ts" x="514" y="343" text-anchor="middle">open / read / mmap / …</text></g>
+      <line x1="302" y1="331" x2="378" y2="331" stroke="#5f5e5a" stroke-width="0.5" stroke-dasharray="4 2"/>
+      <line x1="166" y1="357" x2="166" y2="385" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr3)"/>
+      <line x1="514" y1="357" x2="514" y2="385" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr3)"/>
+      <rect x="30" y="390" width="620" height="28" rx="6" fill="none" stroke-width="0.5" stroke="#888780"/>
+      <text class="ts" x="340" y="408" text-anchor="middle">硬件 / CPU（x86-64 / ARM / RISC-V …）</text>
+    </svg>
+    <div class="diagram-caption"><strong>图 2 · C ABI 作为通用桥梁</strong> — 所有高层语言通过各自的 FFI 降级到 C ABI，再经 libc/syscall 到达硬件。C ABI 是这条链路上唯一通用的"通用语"。</div>
+  </div>
+
+  <h3>System V AMD64 vs Windows x64：两套不兼容的 C 调用约定</h3>
+  <p>即使是 C ABI，在不同平台上也有差异。x86-64 上存在两套主流调用约定，它们互不兼容：</p>
+
+  <!-- 图2：调用约定对比 -->
+  <div class="diagram-card">
+    <svg width="100%" viewBox="0 0 680 400" role="img">
+      <title>System V AMD64 vs Windows x64 调用约定对比</title>
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-teal"><rect x="30" y="10" width="295" height="34" rx="8" stroke-width="0.5"/>
+        <text class="th" x="177" y="31" text-anchor="middle" dominant-baseline="central">System V AMD64（Linux / macOS）</text></g>
+      <g class="c-blue"><rect x="355" y="10" width="295" height="34" rx="8" stroke-width="0.5"/>
+        <text class="th" x="502" y="31" text-anchor="middle" dominant-baseline="central">Windows x64（MSVC / MinGW）</text></g>
+      <text class="ts" x="177" y="66" text-anchor="middle">整数/指针参数（6 个）</text>
+      <text class="ts" x="502" y="66" text-anchor="middle">整数/指针参数（4 个）</text>
+      <g class="c-teal"><rect x="33"  y="74" width="44" height="28" rx="4" stroke-width="0.5"/><text class="th" x="55"  y="92" text-anchor="middle" dominant-baseline="central" font-size="12">RDI</text></g>
+      <g class="c-teal"><rect x="83"  y="74" width="44" height="28" rx="4" stroke-width="0.5"/><text class="th" x="105" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">RSI</text></g>
+      <g class="c-teal"><rect x="133" y="74" width="44" height="28" rx="4" stroke-width="0.5"/><text class="th" x="155" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">RDX</text></g>
+      <g class="c-teal"><rect x="183" y="74" width="44" height="28" rx="4" stroke-width="0.5"/><text class="th" x="205" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">RCX</text></g>
+      <g class="c-teal"><rect x="233" y="74" width="44" height="28" rx="4" stroke-width="0.5"/><text class="th" x="255" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">R8</text></g>
+      <g class="c-teal"><rect x="283" y="74" width="44" height="28" rx="4" stroke-width="0.5"/><text class="th" x="305" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">R9</text></g>
+      <g class="c-blue"><rect x="358" y="74" width="60" height="28" rx="4" stroke-width="0.5"/><text class="th" x="388" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">RCX</text></g>
+      <g class="c-blue"><rect x="424" y="74" width="60" height="28" rx="4" stroke-width="0.5"/><text class="th" x="454" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">RDX</text></g>
+      <g class="c-blue"><rect x="490" y="74" width="60" height="28" rx="4" stroke-width="0.5"/><text class="th" x="520" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">R8</text></g>
+      <g class="c-blue"><rect x="556" y="74" width="60" height="28" rx="4" stroke-width="0.5"/><text class="th" x="586" y="92" text-anchor="middle" dominant-baseline="central" font-size="12">R9</text></g>
+      <line x1="30" y1="118" x2="326" y2="118" stroke="#e2e0d8" stroke-width="0.5"/>
+      <line x1="355" y1="118" x2="648" y2="118" stroke="#e2e0d8" stroke-width="0.5"/>
+      <text class="ts" x="60" y="136">返回值：</text>
+      <g class="c-teal"><rect x="115" y="124" width="205" height="24" rx="4" stroke-width="0.5"/><text class="th" x="218" y="140" text-anchor="middle" dominant-baseline="central" font-size="12">RAX（整数）/ XMM0（浮点）</text></g>
+      <text class="ts" x="378" y="136">返回值：</text>
+      <g class="c-blue"><rect x="438" y="124" width="205" height="24" rx="4" stroke-width="0.5"/><text class="th" x="540" y="140" text-anchor="middle" dominant-baseline="central" font-size="12">RAX（整数）/ XMM0（浮点）</text></g>
+      <text class="ts" x="177" y="170" text-anchor="middle">栈特性</text>
+      <text class="ts" x="502" y="170" text-anchor="middle">栈特性</text>
+      <g class="c-amber"><rect x="33" y="178" width="290" height="36" rx="6" stroke-width="0.5"/>
+        <text class="th" x="178" y="192" text-anchor="middle" dominant-baseline="central" font-size="12">红区（Red Zone）：RSP-128 字节</text>
+        <text class="ts" x="178" y="208" text-anchor="middle">叶函数可用，无需调整 RSP</text></g>
+      <g class="c-coral"><rect x="358" y="178" width="290" height="36" rx="6" stroke-width="0.5"/>
+        <text class="th" x="503" y="192" text-anchor="middle" dominant-baseline="central" font-size="12">影子空间（Shadow Space）：32 字节</text>
+        <text class="ts" x="503" y="208" text-anchor="middle">调用者在 RSP 以上强制预留</text></g>
+      <text class="ts" x="177" y="234" text-anchor="middle">被调用者保存（Callee-saved）</text>
+      <text class="ts" x="502" y="234" text-anchor="middle">被调用者保存（Callee-saved）</text>
+      <rect x="33" y="242" width="290" height="26" rx="6" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="178" y="258" text-anchor="middle" font-family="monospace" font-size="11">RBX  RBP  RSP  R12  R13  R14  R15</text>
+      <rect x="358" y="242" width="290" height="26" rx="6" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="503" y="258" text-anchor="middle" font-family="monospace" font-size="11">RBX  RBP  RSP  RDI  RSI  R12–R15</text>
+      <text class="ts" x="177" y="290" text-anchor="middle">栈对齐</text>
+      <text class="ts" x="502" y="290" text-anchor="middle">栈对齐</text>
+      <g class="c-gray"><rect x="33" y="298" width="290" height="28" rx="6" stroke-width="0.5"/>
+        <text class="th" x="178" y="316" text-anchor="middle" dominant-baseline="central" font-size="12">call 前 RSP 必须 16 字节对齐</text></g>
+      <g class="c-gray"><rect x="358" y="298" width="290" height="28" rx="6" stroke-width="0.5"/>
+        <text class="th" x="503" y="316" text-anchor="middle" dominant-baseline="central" font-size="12">call 前 RSP 必须 16 字节对齐</text></g>
+      <rect x="180" y="344" width="320" height="44" rx="8" fill="none" stroke-width="0.5" stroke="#a32d2d"/>
+      <text class="ts" x="340" y="360" text-anchor="middle" fill="#a32d2d">⚠ 两套 ABI 不兼容：Linux .so</text>
+      <text class="ts" x="340" y="378" text-anchor="middle" fill="#a32d2d">与 Windows .dll 之间无法直接链接</text>
+    </svg>
+    <div class="diagram-caption"><strong>图 3 · System V AMD64 vs Windows x64</strong> — SysV 用 6 个寄存器传整数参数并设有 128 字节红区；Windows 只用 4 个并要求调用者强制预留 32 字节影子空间。即使都是 x86-64，两套 ABI 也互不兼容。</div>
+  </div>
+
+  <h3>ARM AAPCS64 与其他架构</h3>
+  <p>ARM AArch64 遵循 AAPCS64 规范：X0–X7 传整数参数和返回值，V0–V7 传浮点；X19–X28 为被调用者保存寄存器。RISC-V、PowerPC 等也各有处理器补充（processor supplement），均以 C ABI 为中心构建。</p>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 3 — Rust ABI
+══════════════════════════════════════════ -->
+<section id="s3">
+  <p class="section-num">第三章</p>
+  <h2 class="section-title">Rust ABI 问题</h2>
+
+  <p>Rust 的原生 ABI（<code>extern "Rust"</code>）故意设计为不稳定——这是一个有意的工程权衡，而非缺陷。理解这一点，是掌握 Rust 互操作设计的关键。</p>
+
+  <!-- 图4：Rust ABI 策略 -->
+  <div class="diagram-card">
+    <svg width="100%" viewBox="0 0 680 445" role="img">
+      <title>Rust ABI 问题与解决策略</title>
+      <defs>
+        <marker id="arr4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-red"><rect x="175" y="10" width="330" height="50" rx="10" stroke-width="0.5"/>
+        <text class="th" x="340" y="30" text-anchor="middle" dominant-baseline="central">extern "Rust"（原生 ABI）</text>
+        <text class="ts" x="340" y="48" text-anchor="middle">故意不稳定 · 无规范 · 随编译器版本变化</text></g>
+      <rect x="30" y="80" width="620" height="70" rx="8" fill="none" stroke-width="0.5" stroke="#5f5e5a" stroke-dasharray="5 3"/>
+      <text class="ts" x="340" y="100" text-anchor="middle">为何故意不稳定？保留编译器优化自由度：</text>
+      <g class="c-purple"><rect x="48"  y="112" width="172" height="30" rx="6" stroke-width="0.5"/><text class="th" x="134" y="131" text-anchor="middle" dominant-baseline="central" font-size="12">枚举 Niche 优化</text></g>
+      <g class="c-purple"><rect x="230" y="112" width="172" height="30" rx="6" stroke-width="0.5"/><text class="th" x="316" y="131" text-anchor="middle" dominant-baseline="central" font-size="12">结构体字段重排</text></g>
+      <g class="c-purple"><rect x="408" y="112" width="242" height="30" rx="6" stroke-width="0.5"/><text class="th" x="529" y="131" text-anchor="middle" dominant-baseline="central" font-size="12">Option&lt;Box&lt;T&gt;&gt; 空指针优化</text></g>
+      <text class="ts" x="340" y="168" text-anchor="middle">解决方案（三条路径）</text>
+      <line x1="170" y1="158" x2="90"  y2="185" stroke="#5f5e5a" stroke-width="0.5" marker-end="url(#arr4)"/>
+      <line x1="340" y1="158" x2="340" y2="185" stroke="#5f5e5a" stroke-width="0.5" marker-end="url(#arr4)"/>
+      <line x1="510" y1="158" x2="590" y2="185" stroke="#5f5e5a" stroke-width="0.5" marker-end="url(#arr4)"/>
+      <g class="c-teal"><rect x="30" y="185" width="190" height="90" rx="10" stroke-width="0.5"/>
+        <text class="th" x="125" y="205" text-anchor="middle" dominant-baseline="central">extern "C" + #[repr(C)]</text>
+        <text class="ts" x="125" y="222" text-anchor="middle">降级为 C ABI</text>
+        <text class="ts" x="125" y="238" text-anchor="middle">+ #[no_mangle]</text>
+        <text class="ts" x="125" y="254" text-anchor="middle">与 C/C++ 互操作</text></g>
+      <g class="c-amber"><rect x="245" y="185" width="190" height="90" rx="10" stroke-width="0.5"/>
+        <text class="th" x="340" y="205" text-anchor="middle" dominant-baseline="central">stabby crate</text>
+        <text class="ts" x="340" y="222" text-anchor="middle">#[stabby::stabby]</text>
+        <text class="ts" x="340" y="238" text-anchor="middle">保留部分优化</text>
+        <text class="ts" x="340" y="254" text-anchor="middle">版本化 ABI 契约</text></g>
+      <g class="c-blue"><rect x="460" y="185" width="190" height="90" rx="10" stroke-width="0.5"/>
+        <text class="th" x="555" y="205" text-anchor="middle" dominant-baseline="central">abi_stable crate</text>
+        <text class="ts" x="555" y="222" text-anchor="middle">运行时类型校验</text>
+        <text class="ts" x="555" y="238" text-anchor="middle">RString / RVec 等</text>
+        <text class="ts" x="555" y="254" text-anchor="middle">FFI 安全 trait 对象</text></g>
+      <text class="ts" x="340" y="300" text-anchor="middle">#[repr(_)] 布局控制注解</text>
+      <g class="c-gray"><rect x="30"  y="312" width="142" height="44" rx="8" stroke-width="0.5"/>
+        <text class="th" x="101" y="328" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="11">#[repr(C)]</text>
+        <text class="ts" x="101" y="346" text-anchor="middle">C 兼容布局</text></g>
+      <g class="c-gray"><rect x="182" y="312" width="178" height="44" rx="8" stroke-width="0.5"/>
+        <text class="th" x="271" y="328" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="11">#[repr(transparent)]</text>
+        <text class="ts" x="271" y="346" text-anchor="middle">与内部字段相同 ABI</text></g>
+      <g class="c-gray"><rect x="370" y="312" width="142" height="44" rx="8" stroke-width="0.5"/>
+        <text class="th" x="441" y="328" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="11">#[repr(packed)]</text>
+        <text class="ts" x="441" y="346" text-anchor="middle">无填充/对齐</text></g>
+      <g class="c-gray"><rect x="522" y="312" width="128" height="44" rx="8" stroke-width="0.5"/>
+        <text class="th" x="586" y="328" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="11">#[repr(u8)]</text>
+        <text class="ts" x="586" y="346" text-anchor="middle">枚举判别类型</text></g>
+      <rect x="30" y="374" width="620" height="52" rx="8" fill="none" stroke-width="0.5" stroke="#185fa5"/>
+      <text class="ts" x="340" y="394" text-anchor="middle" fill="#185fa5">v0 Name Mangling（RFC 2603）：符号以 _R 开头，可逆编码泛型参数</text>
+      <text class="ts" x="340" y="414" text-anchor="middle" font-family="monospace" font-size="11">mycrate::example  →  _RNvCs15kBYyAo9fc_7mycrate7example</text>
+    </svg>
+    <div class="diagram-caption"><strong>图 4 · Rust ABI 全景</strong> — 顶部是"故意不稳定"的原因（保留编译器优化自由度），三条解决路径，底部是 <code>#[repr]</code> 注解族和 v0 符号修饰规则。</div>
+  </div>
+
+  <h3>通过 <code>extern "C"</code> 与 C 互操作</h3>
+
+  <pre><code>// 导出可被 C 调用的函数
+#[no_mangle]
+pub unsafe extern "C" fn rsvg_handle_new_from_file(
+    filename: *const libc::c_char,
+    error: *mut *mut glib_sys::GError,
+) -> *const RsvgHandle { /* ... */ }
+
+// Option&lt;extern "C" fn&gt; 是可空函数指针的正确表达
+// None = null，无需额外判别位（空指针优化）
+let callback: Option&lt;extern "C" fn(c_int) -> c_int&gt; = None;</code></pre>
+
+  <div class="callout warning">
+    <div class="callout-label">⚠ 常见陷阱</div>
+    <p>用空枚举（uninhabited enum）作 FFI 类型极度危险：编译器依赖空枚举不可居留的性质做激进优化，处理 <code>&amp;Empty</code> 可能触发未定义行为。历史上 <code>#[repr(C)]</code> 枚举在 System V ABI 上按值传递有 bug（rust-lang/rust #68190），曾导致段错误。</p>
+  </div>
+
+  <h3>v0 名称修饰方案</h3>
+  <p>RFC 2603 设计的 v0 方案以 <code>_R</code> 开头，以可逆方式编码完整类型信息（包括泛型实参），支持 backref 压缩，并于 2025 年 11 月成为 nightly 默认方案。注意：v0 明确不是 Rust 稳定 ABI 规范，仅是符号格式标准。</p>
+
+  <h3>语言 ABI 稳定性横向对比</h3>
+  <table class="compare-table">
+    <thead><tr><th>语言</th><th>原生 ABI 稳定性</th><th>互操作方式</th><th>代表方案</th></tr></thead>
+    <tbody>
+      <tr><td>C</td><td><span class="tag stable">稳定</span></td><td>直接</td><td>System V / Win64</td></tr>
+      <tr><td>C++</td><td><span class="tag partial">平台内稳定</span></td><td><code>extern "C"</code> 包装</td><td>Itanium ABI（GCC/Clang）</td></tr>
+      <tr><td>Rust</td><td><span class="tag unstable">故意不稳定</span></td><td><code>extern "C"</code> + <code>#[repr(C)]</code></td><td>stabby / abi_stable</td></tr>
+      <tr><td>Swift</td><td><span class="tag stable">5.0+ Apple 平台稳定</span></td><td>@objc / C 桥接</td><td>@frozen / @inlinable</td></tr>
+      <tr><td>Go</td><td><span class="tag partial">ABI0 稳定</span></td><td>cgo → C ABI</td><td>ABIInternal（内部优化）</td></tr>
+      <tr><td>Python</td><td><span class="tag partial">Limited API 稳定</span></td><td>C 扩展 / ctypes</td><td>abi3 wheel</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 4 — C++ ABI
+══════════════════════════════════════════ -->
+<section id="s4">
+  <p class="section-num">第四章</p>
+  <h2 class="section-title">C++ ABI 问题</h2>
+
+  <p>C++ ABI 是所有主流语言中最复杂的，因为它必须同时解决命名空间/重载/模板的名称修饰、虚函数派发的 vtable、运行时类型识别（RTTI）和异常处理——而 C++ 标准对这些全部未作规定。</p>
+
+  <!-- 图5：C++ ABI 核心 -->
+  <div class="diagram-card">
+    <svg width="100%" viewBox="0 0 680 490" role="img">
+      <title>C++ ABI 核心：vtable 布局与 GCC 5 双 ABI 事件</title>
+      <defs>
+        <marker id="arr5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-purple"><rect x="30" y="10" width="285" height="34" rx="8" stroke-width="0.5"/>
+        <text class="th" x="172" y="31" text-anchor="middle" dominant-baseline="central">Itanium ABI：vtable 布局</text></g>
+      <rect x="42" y="58" width="100" height="90" rx="6" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="92" y="75" text-anchor="middle">对象实例</text>
+      <rect x="50" y="82" width="84" height="28" rx="4" fill="#e6f1fb"/>
+      <text class="ts" x="92" y="100" text-anchor="middle" fill="#0c447c" font-family="monospace" font-size="11">vptr →</text>
+      <rect x="50" y="114" width="84" height="26" rx="4" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="92" y="131" text-anchor="middle">其他字段</text>
+      <text class="ts" x="92" y="154" text-anchor="middle">class Derived</text>
+      <line x1="134" y1="96" x2="174" y2="96" stroke="#185fa5" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="174" y="58" width="128" height="150" rx="6" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="238" y="75" text-anchor="middle">vtable（只读数据）</text>
+      <rect x="182" y="82" width="112" height="26" rx="3" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="238" y="99" text-anchor="middle" font-family="monospace" font-size="10">offset_to_top = 0</text>
+      <rect x="182" y="112" width="112" height="26" rx="3" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="238" y="129" text-anchor="middle" font-family="monospace" font-size="10">typeinfo ptr →</text>
+      <g class="c-teal"><rect x="182" y="142" width="112" height="24" rx="3" stroke-width="0.5"/>
+        <text class="ts" x="238" y="158" text-anchor="middle" font-family="monospace" font-size="10">~Dtor D1 (完整)</text></g>
+      <g class="c-teal"><rect x="182" y="170" width="112" height="24" rx="3" stroke-width="0.5"/>
+        <text class="ts" x="238" y="186" text-anchor="middle" font-family="monospace" font-size="10">~Dtor D0 (删除)</text></g>
+      <g class="c-purple"><rect x="182" y="198" width="112" height="24" rx="3" stroke-width="0.5"/>
+        <text class="ts" x="238" y="214" text-anchor="middle" font-family="monospace" font-size="10">virtualFunc()</text></g>
+      <text class="ts" x="238" y="236" text-anchor="middle">↓ 更多虚函数…</text>
+      <rect x="30" y="255" width="285" height="98" rx="8" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="172" y="272" text-anchor="middle">名称修饰对比（同一函数 add(int,int)）</text>
+      <rect x="42" y="282" width="261" height="24" rx="4" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="172" y="298" text-anchor="middle" font-family="monospace" font-size="11">GCC/Clang:  _Z3addii</text>
+      <rect x="42" y="310" width="261" height="24" rx="4" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="172" y="326" text-anchor="middle" font-family="monospace" font-size="11">MSVC:       ?add@@YAHHH@Z</text>
+      <text class="ts" x="172" y="346" text-anchor="middle" fill="#a32d2d">跨编译器符号不兼容 → 链接失败</text>
+      <line x1="335" y1="10" x2="335" y2="490" stroke="#e2e0d8" stroke-width="0.5"/>
+      <g class="c-coral"><rect x="355" y="10" width="295" height="34" rx="8" stroke-width="0.5"/>
+        <text class="th" x="502" y="31" text-anchor="middle" dominant-baseline="central">GCC 5 libstdc++ 双 ABI 事件（2015）</text></g>
+      <g class="c-gray"><rect x="365" y="58" width="275" height="40" rx="6" stroke-width="0.5"/>
+        <text class="th" x="502" y="73" text-anchor="middle" dominant-baseline="central" font-size="12">GCC &lt; 5.1（旧 ABI）</text>
+        <text class="ts" x="502" y="88" text-anchor="middle">std::string = COW（写时复制）</text></g>
+      <line x1="502" y1="98" x2="502" y2="126" stroke="#a32d2d" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <text class="ts" x="540" y="115" fill="#a32d2d" font-size="11">C++11 禁止 COW</text>
+      <g class="c-red"><rect x="365" y="126" width="275" height="50" rx="6" stroke-width="0.5"/>
+        <text class="th" x="502" y="143" text-anchor="middle" dominant-baseline="central" font-size="12">GCC ≥ 5.1（新 ABI）</text>
+        <text class="ts" x="502" y="162" text-anchor="middle">std::__cxx11::string（非 COW）</text></g>
+      <rect x="365" y="190" width="275" height="52" rx="6" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="502" y="208" text-anchor="middle">宏控制开关</text>
+      <text class="ts" x="502" y="228" text-anchor="middle" font-family="monospace" font-size="12">_GLIBCXX_USE_CXX11_ABI=1（新）</text>
+      <text class="ts" x="502" y="244" text-anchor="middle" font-family="monospace" font-size="12">_GLIBCXX_USE_CXX11_ABI=0（旧）</text>
+      <g class="c-amber"><rect x="365" y="258" width="275" height="52" rx="6" stroke-width="0.5"/>
+        <text class="th" x="502" y="275" text-anchor="middle" dominant-baseline="central" font-size="12">典型链接错误</text>
+        <text class="ts" x="502" y="296" text-anchor="middle" font-family="monospace" font-size="10">undefined ref to std::__cxx11::…</text></g>
+      <rect x="365" y="326" width="275" height="100" rx="8" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="502" y="347" text-anchor="middle">WG21 布拉格会议（2020）</text>
+      <text class="ts" x="502" y="366" text-anchor="middle" font-weight="600">投票结果：不破坏 ABI</text>
+      <text class="ts" x="502" y="385" text-anchor="middle">性能 / ABI稳定 / 可变性</text>
+      <text class="ts" x="502" y="404" text-anchor="middle">三者只能选二 —— Bryce Adelstein</text>
+      <rect x="365" y="435" width="275" height="30" rx="6" fill="none" stroke-width="0.5" stroke="#a32d2d"/>
+      <text class="ts" x="502" y="454" text-anchor="middle" fill="#a32d2d">C++ 标准正式不管 ABI，各编译器各自定义</text>
+    </svg>
+    <div class="diagram-caption"><strong>图 5 · C++ ABI 核心问题</strong> — 左侧：Itanium ABI 的 vtable 内存布局及 GCC/MSVC 名称修饰的不兼容性。右侧：GCC 5 引入的 libstdc++ 双 ABI 历史事件，及 WG21 2020 年"不破坏 ABI"的关键决策。</div>
+  </div>
+
+  <h3>Itanium vs MSVC 名称修饰规则</h3>
+
+  <pre><code>// 同一个函数，两套编译器产生完全不同的符号名：
+
+// GCC / Clang（Itanium ABI）：
+int add(int, int)  →  _Z3addii
+  // _Z = Itanium 前缀，3 = 名称长度，add = 函数名，ii = int,int
+
+// MSVC：
+int add(int, int)  →  ?add@@YAHHH@Z
+  // ? = 修饰开始，@@ = 全局作用域，Y = 普通函数
+  // A = __cdecl，H = int 返回，HH = int,int 参数，@Z = 结尾
+
+// C++ 成员函数（Itanium）：
+Foo::bar(int)  →  _ZN3Foo3barEi
+  // N = 嵌套名，3Foo = 类名，3bar = 方法名，E = 结束，i = int</code></pre>
+
+  <div class="callout danger">
+    <div class="callout-label">🔥 历史教训：GCC 5 双 ABI 事件</div>
+    <p>GCC 5.1（2015）将 <code>std::string</code> 从 COW 实现迁移到 C++11 要求的 SSO 实现，布局完全不同。新实现放入内联命名空间 <code>std::__cxx11</code>，由宏 <code>_GLIBCXX_USE_CXX11_ABI</code> 控制。混链不同值编译的对象会触发链接错误，遇到 <code>undefined reference to 'std::__cxx11::...'</code> 即为此问题。至今仍是 Linux 生态 C++ 库最常见的兼容性问题之一。</p>
+  </div>
+
+  <h3>WG21 的"三选二"困境</h3>
+  <p>2020 年布拉格会议，C++ 标准委员会就 ABI 破坏进行系列投票，最终选择不破坏 ABI。Bryce Adelstein Lelbach 总结了这一永恒困境：</p>
+  <blockquote style="border-left:3px solid var(--rule-2);padding:12px 20px;margin:20px 0;font-style:italic;color:var(--ink-2);">
+    "Performance / ABI Stability / Ability to Change — You can pick two, choose wisely."
+  </blockquote>
+  <p>许多影响深远的库改进（如更好的哈希函数、优化的容器布局）因 ABI 顾虑在提案阶段就被过滤掉，这是 C++ 生态为稳定性付出的长期代价。</p>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 5 — 其他语言
+══════════════════════════════════════════ -->
+<section id="s5">
+  <p class="section-num">第五章</p>
+  <h2 class="section-title">其他语言的 ABI</h2>
+
+  <h3>Swift：Apple 平台的成功案例</h3>
+  <p>Swift 5.0（2019）在 Apple 平台实现了 ABI 稳定，Swift 运行时和标准库随 OS 发布，应用无需再嵌入它们（此前每个应用约增加 5 MB）。关键机制：</p>
+  <ul style="color:var(--ink-2);line-height:1.9;padding-left:20px;margin-bottom:16px;">
+    <li><code>@frozen</code>（Swift 5.1）— 承诺结构体不增删重排字段，枚举不增删 case；是 ABI 稳定的核心承诺</li>
+    <li><code>@inlinable</code>（Swift 4.2）— 允许调用方内联实现，以 ABI 灵活性换性能</li>
+    <li><code>.swiftinterface</code> 模块接口文件（Swift 5.1）— 跨编译器版本的二进制框架分发</li>
+  </ul>
+  <div class="callout info">
+    <div class="callout-label">ℹ️ 注意</div>
+    <p>Swift ABI 稳定仅在 Apple 平台（macOS/iOS/watchOS/tvOS）上有效。Linux 和 Windows 上 Swift 的 ABI 尚未稳定，Swift Core Team 称随这些平台成熟会评估。</p>
+  </div>
+
+  <h3>Go：双 ABI 设计</h3>
+  <p>Go 运行时维护两套 ABI 并通过透明包装器互相调用：</p>
+  <table class="compare-table">
+    <thead><tr><th>ABI</th><th>特性</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td><strong>ABI0</strong></td><td>栈式调用约定（Plan 9 风格）</td><td>汇编代码使用，跨语言边界的稳定契约</td></tr>
+      <tr><td><strong>ABIInternal</strong></td><td>寄存器式（Go 1.17 引入），比 ABI0 快约 40%</td><td>纯 Go 函数内部调用，随版本演进</td></tr>
+    </tbody>
+  </table>
+  <p>Go 刻意使用自有 ABI 而非平台 ABI，因为 goroutine 栈动态伸缩的需求（运行时可动态调整栈大小），以及简化 GC 追踪和 panic 展开的工程需求。</p>
+
+  <h3>Python：Stable ABI / abi3</h3>
+  <p>Python 3.2 引入 Limited API（<code>Py_LIMITED_API</code> 宏）及对应的 Stable ABI（abi3）——只用 Limited API 编译的扩展一次构建即可在多个 Python 3.x 版本上运行，无需为每个版本重新编译。核心价值：O(1) 构建——旧 wheel 在新 Python 上仍可用。</p>
+  <pre><code># setup.py 指定 abi3，扩展文件名为 myext.abi3.so
+from setuptools import setup, Extension
+setup(ext_modules=[Extension(
+    "myext",
+    ["myext.c"],
+    py_limited_api=True,    # 启用 Limited API
+    define_macros=[("Py_LIMITED_API", "0x030a0000")],  # 最低 3.10
+)])</code></pre>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 6 — 工程实践
+══════════════════════════════════════════ -->
+<section id="s6">
+  <p class="section-num">第六章</p>
+  <h2 class="section-title">工程实践</h2>
+
+  <!-- 图6：工程实践 -->
+  <div class="diagram-card">
+    <svg width="100%" viewBox="0 0 680 450" role="img">
+      <title>动态库 ABI 管理：SONAME、符号版本化与检测工具链</title>
+      <defs>
+        <marker id="arr6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-teal"><rect x="30" y="10" width="295" height="30" rx="8" stroke-width="0.5"/>
+        <text class="th" x="177" y="29" text-anchor="middle" dominant-baseline="central">SONAME / 动态库版本管理</text></g>
+      <rect x="30" y="52" width="295" height="150" rx="8" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="177" y="72" text-anchor="middle">文件名 vs SONAME vs 链接名</text>
+      <rect x="42" y="82" width="271" height="26" rx="4" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="177" y="99" text-anchor="middle" font-family="monospace" font-size="11">libfoo.so.2.3.1  ← 真实文件</text>
+      <line x1="177" y1="108" x2="177" y2="118" stroke="#5f5e5a" stroke-width="0.5" marker-end="url(#arr6)"/>
+      <g class="c-teal"><rect x="42" y="118" width="271" height="26" rx="4" stroke-width="0.5"/>
+        <text class="ts" x="177" y="135" text-anchor="middle" font-family="monospace" font-size="11">DT_SONAME: libfoo.so.2  ← 兼容键</text></g>
+      <line x1="177" y1="144" x2="177" y2="154" stroke="#5f5e5a" stroke-width="0.5" marker-end="url(#arr6)"/>
+      <rect x="42" y="154" width="271" height="26" rx="4" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="177" y="171" text-anchor="middle" font-family="monospace" font-size="11">libfoo.so  ← 链接时 -lfoo 使用</text>
+      <text class="ts" x="177" y="198" text-anchor="middle" fill="#a32d2d">ABI 破坏 → SONAME 主版本号递增</text>
+      <g class="c-blue"><rect x="355" y="10" width="295" height="30" rx="8" stroke-width="0.5"/>
+        <text class="th" x="502" y="29" text-anchor="middle" dominant-baseline="central">ELF 符号版本化（glibc 风格）</text></g>
+      <rect x="355" y="52" width="295" height="150" rx="8" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="ts" x="502" y="72" text-anchor="middle">同一符号多版本共存</text>
+      <g class="c-gray"><rect x="367" y="82" width="271" height="26" rx="4" stroke-width="0.5"/>
+        <text class="ts" x="502" y="99" text-anchor="middle" font-family="monospace" font-size="11">memcpy@GLIBC_2.2.5  ← 旧版本</text></g>
+      <g class="c-blue"><rect x="367" y="112" width="271" height="26" rx="4" stroke-width="0.5"/>
+        <text class="ts" x="502" y="129" text-anchor="middle" font-family="monospace" font-size="11">memcpy@@GLIBC_2.14 ← 新默认版本</text></g>
+      <text class="ts" x="502" y="160" text-anchor="middle">三个 ELF 节协同工作</text>
+      <text class="ts" x="502" y="178" text-anchor="middle" font-family="monospace" font-size="10">.gnu.version  .gnu.version_d  .gnu.version_r</text>
+      <text class="ts" x="502" y="198" text-anchor="middle" fill="#0f6e56">旧程序在新 Linux 上无需重编译</text>
+      <g class="c-amber"><rect x="30" y="220" width="620" height="30" rx="8" stroke-width="0.5"/>
+        <text class="th" x="340" y="239" text-anchor="middle" dominant-baseline="central">ABI 检测工具链（集成进 CI/CD）</text></g>
+      <g class="c-gray"><rect x="30" y="264" width="110" height="52" rx="8" stroke-width="0.5"/>
+        <text class="th" x="85" y="283" text-anchor="middle" dominant-baseline="central" font-size="12">旧版库</text>
+        <text class="ts" x="85" y="301" text-anchor="middle">libfoo.so.1</text></g>
+      <g class="c-gray"><rect x="30" y="336" width="110" height="52" rx="8" stroke-width="0.5"/>
+        <text class="th" x="85" y="355" text-anchor="middle" dominant-baseline="central" font-size="12">新版库</text>
+        <text class="ts" x="85" y="373" text-anchor="middle">libfoo.so.2</text></g>
+      <line x1="140" y1="290" x2="196" y2="315" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr6)"/>
+      <line x1="140" y1="362" x2="196" y2="337" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr6)"/>
+      <g class="c-purple"><rect x="196" y="300" width="110" height="52" rx="8" stroke-width="0.5"/>
+        <text class="th" x="251" y="319" text-anchor="middle" dominant-baseline="central" font-size="11">abidw</text>
+        <text class="ts" x="251" y="338" text-anchor="middle">导出 ABI XML</text></g>
+      <line x1="306" y1="326" x2="348" y2="326" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr6)"/>
+      <g class="c-purple"><rect x="348" y="300" width="110" height="52" rx="8" stroke-width="0.5"/>
+        <text class="th" x="403" y="319" text-anchor="middle" dominant-baseline="central" font-size="11">abidiff</text>
+        <text class="ts" x="403" y="338" text-anchor="middle">比较两个 corpus</text></g>
+      <line x1="458" y1="326" x2="492" y2="326" stroke="#5f5e5a" stroke-width="1" marker-end="url(#arr6)"/>
+      <line x1="548" y1="326" x2="548" y2="286" stroke="#3b6d11" stroke-width="1" marker-end="url(#arr6)"/>
+      <line x1="548" y1="326" x2="548" y2="366" stroke="#a32d2d" stroke-width="1" marker-end="url(#arr6)"/>
+      <g class="c-green"><rect x="492" y="260" width="148" height="26" rx="6" stroke-width="0.5"/>
+        <text class="ts" x="566" y="277" text-anchor="middle">bit4=0 → 兼容 ✓</text></g>
+      <g class="c-red"><rect x="492" y="366" width="148" height="26" rx="6" stroke-width="0.5"/>
+        <text class="ts" x="566" y="383" text-anchor="middle">bit4=1 → ABI 破坏 ✗</text></g>
+      <rect x="492" y="300" width="148" height="52" rx="8" fill="none" stroke-width="0.5" stroke="#5f5e5a"/>
+      <text class="th" x="566" y="317" text-anchor="middle" dominant-baseline="central" font-size="11">abidiff 输出</text>
+      <text class="ts" x="566" y="335" text-anchor="middle" font-size="10">Δ 类型 / 函数 / 变量</text>
+      <text class="ts" x="566" y="350" text-anchor="middle" font-size="10">按破坏程度分级</text>
+      <rect x="30" y="408" width="620" height="28" rx="6" fill="none" stroke-width="0.5" stroke="#e2e0d8"/>
+      <text class="ts" x="340" y="426" text-anchor="middle">其他工具：abi-compliance-checker · abi3audit（Python） · make check-abi（libstdc++）</text>
+    </svg>
+    <div class="diagram-caption"><strong>图 6 · ABI 工程实践</strong> — SONAME 三层命名机制（真实文件→DT_SONAME→链接名），ELF 符号版本化（让旧程序在新系统上无需重编译的核心机制），以及 libabigail 的 CI 检测流程。</div>
+  </div>
+
+  <h3>ELF 符号版本化实战</h3>
+  <pre><code># 强制绑定到旧版符号（避免依赖新版 glibc）
+__asm__(".symver clock_gettime,clock_gettime@GLIBC_2.17");
+
+# 版本脚本（version script）
+MYLIB_2.0 {
+  global:
+    my_func_v2;     # 新版本导出
+  local:
+    *;              # 隐藏所有内部符号
+};
+
+MYLIB_1.0 {
+  global:
+    my_func;        # 旧版本保留
+} MYLIB_2.0;        # 继承关系
+
+# 检查二进制依赖的最低 glibc 版本
+objdump -T libfoo.so | grep GLIBC</code></pre>
+
+  <h3>ABI 设计最佳实践</h3>
+  <div class="findings-grid">
+    <div class="finding-card">
+      <div class="finding-num">接口设计</div>
+      <p>公共接口用 <code>extern "C"</code> 暴露。不在 ABI 边界暴露 C++ 模板、STL 容器、Rust 原生类型或异常。用 pimpl 惯用法隐藏实现细节。</p>
+    </div>
+    <div class="finding-card">
+      <div class="finding-num">版本管理</div>
+      <p>ABI 破坏时递增 SONAME 主版本号。用版本脚本控制导出面、隐藏内部符号。在结构体尾部添加字段并预留保留字段。</p>
+    </div>
+    <div class="finding-card">
+      <div class="finding-num">CI 检测</div>
+      <p>将 <code>abidiff</code>（libabigail）纳入 CI，对照上一发布版检测。返回码 bit4=1 设为构建失败，bit3=1 设为人工评审。</p>
+    </div>
+    <div class="finding-card">
+      <div class="finding-num">Rust 场景</div>
+      <p>默认静态链接。只在需要运行时插件/动态加载时才引入 <code>abi_stable</code> 或 <code>stabby</code>，并接受"加载时校验布局"的代价。</p>
+    </div>
+    <div class="finding-card">
+      <div class="finding-num">C++ 场景</div>
+      <p>在同一发行链内统一 GCC/libstdc++ 主版本，明确并固定 <code>_GLIBCXX_USE_CXX11_ABI</code> 取值并在文档中声明。</p>
+    </div>
+    <div class="finding-card">
+      <div class="finding-num">Python 场景</div>
+      <p>用 Limited API 编译 abi3 wheel，用 <code>abi3audit</code> 验证标记与实际一致，避免"标记兼容、实际依赖新符号"的隐患。</p>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-label">💡 核心原则</div>
+    <p>跨语言/跨编译器互操作，一律以 C ABI 为边界。若头文件中出现 <code>std::string</code>、<code>std::vector</code>、模板或 <code>inline</code> 函数作为导出接口，就已经把自己绑定到特定编译器/标准库 ABI。两个不同 rustc 构建的 <code>cdylib</code> 之间，不要传递任何非 <code>#[repr(C)]</code> 类型。</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     FOOTER
+══════════════════════════════════════════ -->
+<footer class="doc-footer">
+  <span>ABI 深度调研报告 · 2026 年 6 月</span>
+  <span>参考：System V ABI · Itanium C++ ABI · Rust RFC 2603 · WG21 P1654R0 · GCC Dual ABI</span>
+</footer>
+
+</div><!-- .page-wrap -->
+</body>
+</html>
